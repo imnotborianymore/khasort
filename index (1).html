@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sort</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}.app{width:min(900px,calc(100% - 28px));margin:36px auto}.status{text-align:center;font-size:clamp(23px,3.2vw,31px);line-height:1.45;font-weight:400;margin-bottom:26px}.status span{display:block}.choices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:stretch}button{background:#fff;color:#111;border:2px solid #222;border-radius:0;font:inherit;cursor:pointer}.name{min-width:0;min-height:290px;padding:12px;display:flex;align-items:center;justify-content:center;text-align:center;overflow-wrap:anywhere;font-size:clamp(18px,2.3vw,24px)}.middle{display:grid;grid-template-rows:1fr 1fr;gap:10px;min-width:0}.middle button{padding:10px 4px;font-size:clamp(16px,2vw,21px)}.action{padding:9px 16px;margin-top:20px;font-size:15px}.save-note{text-align:center;color:#666;font-size:13px;margin-top:12px}.center{text-align:center}.finished{text-align:center}.results{white-space:pre-line;text-align:left;line-height:1.9;margin:24px auto;max-width:500px;font-size:clamp(22px,3vw,28px)}.results .rank{display:block}.results .rank{font-size:clamp(18px,2.4vw,23px);font-weight:400;line-height:1.8;margin-bottom:0}.hidden{display:none!important}@media(max-width:600px){.app{margin-top:26px}.status{margin-bottom:19px}.choices{gap:8px}.name{min-height:220px;padding:6px}.middle{gap:8px}.middle button{font-size:14px;padding:8px 2px}}
+</style></head><body><main class="app">
+<section id="sorter"><div class="status"><span id="battle">Battle No.1</span><span id="progress">0% sorted.</span></div><div class="choices"><button id="left" class="name" aria-label="왼쪽 이름 선택"></button><div class="middle"><button id="both">둘 다 좋다</button><button id="skip">모르겠다</button></div><button id="right" class="name" aria-label="오른쪽 이름 선택"></button></div><div class="center"><button id="restart" class="action">처음부터 다시</button><div class="save-note">진행 상황 자동 저장 중 · 같은 브라우저에서 다시 열면 이어서 할 수 있어요.</div></div></section>
+<section id="finished" class="finished hidden"><div class="status">Sort complete.</div><div id="results" class="results"></div><div class="center"><button id="again" class="action">다시 정렬하기</button></div></section></main>
+<script>
+// 인원을 추가하려면 아래 names 배열에 이름만 추가하세요.
+const names = [
+  "이도원",
+  "정의경",
+  "이한솔",
+  "정우영",
+  "조태훈",
+  "김도원",
+  "김신학",
+  "조운식",
+  "하무경",
+  "김준영",
+  "고봉현",
+  "전영제",
+  "김태웅",
+  "강전구",
+  "이성민",
+  "김동욱",
+  "이준희",
+  "김지운",
+  "김민규",
+  "정진호",
+  "김연빈",
+  "차혜성",
+  "변서준",
+  "이혁규",
+  "유찬민",
+  "오황제",
+  "김태훈",
+  "진유성",
+  "진유환",
+  "김승현",
+  "송제우",
+  "육태형",
+  "김재호",
+  "심재복",
+  "김기유",
+  "김현우",
+  "박영준",
+  "안준기",
+  "박주니",
+  "차성현",
+  "박동현",
+  "강덕진",
+  "김진영",
+  "이요셉",
+  "조동현",
+  "전진수",
+  "김락찬",
+  "안재필",
+  "강준구",
+  "김도현",
+  "최현근",
+  "조동함",
+  "큰창우",
+  "신동혁",
+  "문찬혁",
+  "최지성",
+  "구창은",
+  "육태경",
+  "김정우",
+  "김태관",
+  "김동준",
+  "고예일",
+  "유명한",
+  "최범문",
+  "민병탁",
+  "원민준",
+  "이세빈",
+  "김희수",
+  "신재섭",
+  "김힘찬",
+  "김찬영",
+  "유효인",
+  "이현식",
+  "서현호",
+  "원승현",
+  "나의찬",
+  "김민재",
+  "박영길",
+  "이민호",
+  "강석주",
+  "이병주",
+  "김지훈",
+  "김재순",
+  "연민모",
+  "이태주",
+  "박재용",
+  "장동현",
+  "박시우",
+  "박지섭",
+  "홍신의",
+  "허준석",
+  "김동철",
+  "김기민",
+  "작창우",
+  "하민호",
+  "박광순",
+  "김태규",
+  "정미르",
+  "김진호",
+  "정재완",
+  "박지원",
+  "이주승",
+  "박세웅",
+  "지형진"
+];
+const TOTAL_BATTLES = names.length * (names.length - 1) / 2;
+const SAVE_KEY = 'kohasort_round_robin_v1';
+let battleNo = 0, battles = [], scores = new Map(), currentPair = null;
+function saveProgress() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      names, battleNo, battles, scores: [...scores.entries()], finished: battleNo >= TOTAL_BATTLES
+    }));
+  } catch (e) {
+    console.warn('진행 상황을 저장하지 못했습니다.', e);
+  }
+}
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (JSON.stringify(data.names) !== JSON.stringify(names) ||
+        !Array.isArray(data.battles) || data.battles.length !== TOTAL_BATTLES ||
+        !Array.isArray(data.scores) || !Number.isInteger(data.battleNo) ||
+        data.battleNo < 0 || data.battleNo > TOTAL_BATTLES) return false;
+    battles = data.battles;
+    battleNo = data.battleNo;
+    scores = new Map(data.scores);
+    if (data.finished || battleNo >= TOTAL_BATTLES) showResults();
+    else {
+      $('finished').classList.add('hidden');
+      $('sorter').classList.remove('hidden');
+      showBattle();
+    }
+    return true;
+  } catch (e) {
+    console.warn('저장된 진행 상황을 불러오지 못했습니다.', e);
+    return false;
+  }
+}
+const $ = id => document.getElementById(id);
+function shuffle(list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function makeBattles() {
+  // 모든 이름 조합을 정확히 한 번씩 대진표에 넣은 뒤 순서를 무작위로 섞습니다.
+  const pairs = [];
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) pairs.push([names[i], names[j]]);
+  }
+  return shuffle(pairs);
+}
+function start() {
+  if (names.length < 2) { alert('이름을 두 명 이상 등록해 주세요.'); return; }
+  battleNo = 0;
+  scores = new Map(names.map(n => [n, 0]));
+  battles = makeBattles();
+  saveProgress();
+  $('finished').classList.add('hidden');
+  $('sorter').classList.remove('hidden');
+  showBattle();
+}
+function showBattle() {
+  if (battleNo >= TOTAL_BATTLES) { showResults(); return; }
+  currentPair = battles[battleNo];
+  $('left').textContent = currentPair[0];
+  $('right').textContent = currentPair[1];
+  $('battle').textContent = `Battle No.${battleNo + 1} / ${TOTAL_BATTLES}`;
+  $('progress').textContent = `${Math.floor(battleNo / TOTAL_BATTLES * 100)}% sorted.`;
+  saveProgress();
+}
+function choose(action) {
+  if (!currentPair) return;
+  const [left, right] = currentPair;
+  if (action === 'left') scores.set(left, scores.get(left) + 1);
+  else if (action === 'right') scores.set(right, scores.get(right) + 1);
+  else if (action === 'both') {
+    scores.set(left, scores.get(left) + 0.5);
+    scores.set(right, scores.get(right) + 0.5);
+  }
+  // '모르겠다'는 점수를 바꾸지 않고 다음 대진으로 넘어갑니다.
+  battleNo++;
+  currentPair = null;
+  saveProgress();
+  showBattle();
+}
+function showResults() {
+  $('sorter').classList.add('hidden');
+  $('finished').classList.remove('hidden');
+  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  let previousScore = null;
+  let displayedRank = 0;
+  $('results').innerHTML = ranked.map(([name, score], i) => {
+    if (previousScore === null || score !== previousScore) displayedRank = i + 1;
+    previousScore = score;
+    return `<span class="rank">${displayedRank}. ${name}</span>`;
+  }).join('');
+}
+$('left').addEventListener('click', () => choose('left'));
+$('right').addEventListener('click', () => choose('right'));
+$('both').addEventListener('click', () => choose('both'));
+$('skip').addEventListener('click', () => choose('skip'));
+$('restart').addEventListener('click', start);
+$('again').addEventListener('click', start);
+if (!loadProgress()) start();
+</script></body></html>
